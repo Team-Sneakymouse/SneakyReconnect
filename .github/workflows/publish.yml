@@ -1,0 +1,21 @@
+name: Publish Maven
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: maven-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    uses: Team-Sneakymouse/ci/.github/workflows/gradle-publish.yml@main
+    secrets:
+      INFISICAL_IDENTITY_ID: ${{ secrets.INFISICAL_IDENTITY_ID }}
+      INFISICAL_DOMAIN: ${{ secrets.INFISICAL_DOMAIN }}

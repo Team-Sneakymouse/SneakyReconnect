@@ -1,0 +1,20 @@
+# Servers (names from velocity.toml) to send players back to after a restart.
+servers:
+  - dev
+
+# Only players with this permission get auto-reconnected. Leave empty for everyone.
+permission: ""
+
+# Seconds to count down once the server is back, before reconnecting.
+# Players can click the chat message to cancel.
+countdown-seconds: 5
+
+# How often to ping the server while waiting.
+poll-interval-seconds: 2
+
+# The server must stop answering pings within this time after the kick, or we assume it
+# wasn't a restart (for example a normal /kick) and stop.
+shutdown-timeout-seconds: 60
+
+# Stop waiting if the server isn't back within this time.
+startup-timeout-seconds: 600
