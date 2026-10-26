@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 /** Wires {@link ReconnectSession}s to Velocity events, pings, and chat. */
 final class ReconnectManager {
 
+    static final String PERMISSION = "sneakyreconnect.reconnect";
     static final String CANCEL_COMMAND = "/autoreconnect cancel";
     private static final PingOptions PING_OPTIONS = PingOptions.builder().timeout(Duration.ofSeconds(3)).build();
 
@@ -60,7 +61,7 @@ final class ReconnectManager {
         ReconnectSettings current = settings;
         if (!current.watches(server)) return;
         Player player = event.getPlayer();
-        if (!current.permission().isEmpty() && !player.hasPermission(current.permission())) return;
+        if (!player.hasPermission(PERMISSION)) return;
 
         synchronized (this) {
             sessions.put(player.getUniqueId(),
@@ -81,9 +82,8 @@ final class ReconnectManager {
                 // Back where they wanted to be, through us or by hand.
                 end(player.getUniqueId(), tracked);
             } else if (session.onConnectedElsewhere()) {
+                // The player moved on purpose; drop the reconnect quietly.
                 end(player.getUniqueId(), tracked);
-                player.sendMessage(Component.text("You switched servers, so auto-reconnect to "
-                        + session.server() + " was cancelled.", NamedTextColor.GRAY));
             } else {
                 // Sent after landing on the fallback: chat sent mid-transfer can get lost.
                 player.sendMessage(cancellable(Component.text("You'll be reconnected to "
@@ -123,7 +123,7 @@ final class ReconnectManager {
             if (session.wantsPing() && !tracked.pingInFlight && now - tracked.lastPingAt >= pollInterval) {
                 ping(player.get(), tracked);
             }
-            handle(player.get(), tracked, session.onSecond(now));
+            handle(player.get(), tracked, session.onTick(now));
         }
     }
 
@@ -150,15 +150,9 @@ final class ReconnectManager {
         ReconnectSession session = tracked.session;
         String server = session.server();
         switch (step) {
-            case NONE -> { }
-            case SERVER_DOWN -> player.sendMessage(cancellable(Component.text(
-                    server + " is offline. Waiting for it to come back... ", NamedTextColor.GRAY)));
-            case COUNTDOWN_STARTED -> {
-                player.sendMessage(cancellable(Component.text(server + " is back up! Reconnecting in "
-                        + session.secondsLeft() + "s. ", NamedTextColor.GREEN)));
-                player.sendActionBar(countdown(server, session.secondsLeft()));
-            }
-            case COUNTDOWN_TICK -> player.sendActionBar(countdown(server, session.secondsLeft()));
+            case NONE, SERVER_DOWN -> { }
+            case SERVER_UP -> player.sendMessage(cancellable(Component.text(server
+                    + " is back up! Reconnecting in " + session.delaySeconds() + " seconds. ", NamedTextColor.GREEN)));
             case CONNECT_NOW -> connect(player, tracked);
             case GAVE_UP_NO_RESTART -> {
                 end(player.getUniqueId(), tracked);
@@ -181,7 +175,6 @@ final class ReconnectManager {
             end(player.getUniqueId(), tracked);
             return;
         }
-        player.sendActionBar(Component.text("Reconnecting to " + name + "...", NamedTextColor.GREEN));
         player.createConnectionRequest(server.get()).connect().whenComplete((result, error) -> {
             synchronized (this) {
                 if (sessions.get(player.getUniqueId()) != tracked) return;
@@ -206,10 +199,6 @@ final class ReconnectManager {
     private void end(UUID id, Tracked tracked) {
         tracked.session.finish();
         sessions.remove(id, tracked);
-    }
-
-    private static Component countdown(String server, int seconds) {
-        return Component.text("Reconnecting to " + server + " in " + seconds + "...", NamedTextColor.GREEN);
     }
 
     /** Makes the whole line clickable to cancel, ending with a visible [Cancel] tag. */

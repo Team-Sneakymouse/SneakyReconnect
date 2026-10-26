@@ -1,13 +1,11 @@
 # Servers (names from velocity.toml) to send players back to after a restart.
+# Only players with the sneakyreconnect.reconnect permission are sent back.
 servers:
-  - dev
+  - dev-main
 
-# Only players with this permission get auto-reconnected. Leave empty for everyone.
-permission: ""
-
-# Seconds to count down once the server is back, before reconnecting.
-# Players can click the chat message to cancel.
-countdown-seconds: 5
+# Once the server is back, players get one chat message and are reconnected this many
+# seconds later. Clicking the message cancels.
+reconnect-delay-seconds: 5
 
 # How often to ping the server while waiting.
 poll-interval-seconds: 2

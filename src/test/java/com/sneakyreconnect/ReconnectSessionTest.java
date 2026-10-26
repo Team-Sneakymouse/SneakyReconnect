@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class ReconnectSessionTest {
 
     private static final ReconnectSettings SETTINGS = ReconnectSettings.fromMap(Map.of(
-            "countdown-seconds", 3,
+            "reconnect-delay-seconds", 3,
             "shutdown-timeout-seconds", 60,
             "startup-timeout-seconds", 600));
 
@@ -21,18 +21,19 @@ class ReconnectSessionTest {
     }
 
     @Test
-    void fullRestartCountsDownThenConnects() {
+    void fullRestartWaitsForDelayThenConnects() {
         ReconnectSession s = session();
         assertEquals(Step.NONE, s.onPing(true, 1_000)); // still shutting down
         assertEquals(Step.SERVER_DOWN, s.onPing(false, 3_000));
         assertEquals(Step.NONE, s.onPing(false, 30_000));
-        assertEquals(Step.COUNTDOWN_STARTED, s.onPing(true, 40_000));
-        assertEquals(3, s.secondsLeft());
+        assertEquals(Step.SERVER_UP, s.onPing(true, 40_000));
+        assertEquals(3, s.delaySeconds());
         assertFalse(s.wantsPing());
-        assertEquals(Step.COUNTDOWN_TICK, s.onSecond(41_000));
-        assertEquals(Step.COUNTDOWN_TICK, s.onSecond(42_000));
-        assertEquals(Step.CONNECT_NOW, s.onSecond(43_000));
+        assertEquals(Step.NONE, s.onTick(41_000));
+        assertEquals(Step.NONE, s.onTick(42_999));
+        assertEquals(Step.CONNECT_NOW, s.onTick(43_000));
         assertEquals(Phase.CONNECTING, s.phase());
+        assertEquals(Step.NONE, s.onTick(44_000)); // only connects once
     }
 
     @Test
@@ -65,18 +66,16 @@ class ReconnectSessionTest {
         ReconnectSession s = session();
         s.onPing(false, 1_000);
         s.onPing(true, 2_000);
-        s.onSecond(3_000);
-        s.onSecond(4_000);
-        s.onSecond(5_000);
+        assertEquals(Step.CONNECT_NOW, s.onTick(5_000));
         s.onConnectFailed(5_500);
         assertEquals(Phase.AWAITING_STARTUP, s.phase());
         assertTrue(s.wantsPing());
-        assertEquals(Step.COUNTDOWN_STARTED, s.onPing(true, 8_000));
+        assertEquals(Step.SERVER_UP, s.onPing(true, 8_000));
     }
 
     @Test
-    void zeroCountdownConnectsImmediately() {
-        ReconnectSession s = new ReconnectSession("dev", ReconnectSettings.fromMap(Map.of("countdown-seconds", 0)), 0);
+    void zeroDelayConnectsImmediately() {
+        ReconnectSession s = new ReconnectSession("dev", ReconnectSettings.fromMap(Map.of("reconnect-delay-seconds", 0)), 0);
         s.onPing(false, 1_000);
         assertEquals(Step.CONNECT_NOW, s.onPing(true, 2_000));
     }
@@ -89,9 +88,9 @@ class ReconnectSessionTest {
     }
 
     @Test
-    void countdownDoesNothingOutsideCountdownPhase() {
+    void tickDoesNothingBeforeServerIsUp() {
         ReconnectSession s = session();
-        assertEquals(Step.NONE, s.onSecond(1_000));
+        assertEquals(Step.NONE, s.onTick(1_000));
         s.finish();
         assertEquals(Step.NONE, s.onPing(false, 2_000));
     }

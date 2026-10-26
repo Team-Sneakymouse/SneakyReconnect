@@ -5,18 +5,17 @@ package com.sneakyreconnect;
  *
  * <p>Flow: the player is kicked from the server and moved to a fallback. We wait until the server
  * stops answering pings (so we don't bounce back into a server that's still shutting down), then
- * until it answers again, then count down and reconnect.
+ * until it answers again, then wait a short delay (so the player can cancel) and reconnect.
  */
 public final class ReconnectSession {
 
-    public enum Phase { AWAITING_SHUTDOWN, AWAITING_STARTUP, COUNTDOWN, CONNECTING, FINISHED }
+    public enum Phase { AWAITING_SHUTDOWN, AWAITING_STARTUP, DELAY, CONNECTING, FINISHED }
 
     /** What the caller should tell the player or do next. */
     public enum Step {
         NONE,
         SERVER_DOWN,
-        COUNTDOWN_STARTED,
-        COUNTDOWN_TICK,
+        SERVER_UP,
         CONNECT_NOW,
         GAVE_UP_NO_RESTART,
         GAVE_UP_TIMEOUT,
@@ -26,7 +25,6 @@ public final class ReconnectSession {
     private final ReconnectSettings settings;
     private Phase phase = Phase.AWAITING_SHUTDOWN;
     private long phaseStartedAt;
-    private int secondsLeft;
     private boolean landedOnFallback;
 
     public ReconnectSession(String server, ReconnectSettings settings, long nowMillis) {
@@ -39,7 +37,8 @@ public final class ReconnectSession {
 
     public Phase phase() { return phase; }
 
-    public int secondsLeft() { return secondsLeft; }
+    /** Seconds between the "back up" message and the reconnect. */
+    public int delaySeconds() { return settings.reconnectDelaySeconds(); }
 
     public boolean isFinished() { return phase == Phase.FINISHED; }
 
@@ -74,7 +73,7 @@ public final class ReconnectSession {
                 }
             }
             case AWAITING_STARTUP -> {
-                if (online) return startCountdown(nowMillis);
+                if (online) return serverUp(nowMillis);
                 if (nowMillis - phaseStartedAt >= settings.startupTimeoutMillis()) {
                     enter(Phase.FINISHED, nowMillis);
                     return Step.GAVE_UP_TIMEOUT;
@@ -85,15 +84,12 @@ public final class ReconnectSession {
         return Step.NONE;
     }
 
-    /** Called once per second. */
-    public Step onSecond(long nowMillis) {
-        if (phase != Phase.COUNTDOWN) return Step.NONE;
-        secondsLeft--;
-        if (secondsLeft <= 0) {
-            enter(Phase.CONNECTING, nowMillis);
-            return Step.CONNECT_NOW;
-        }
-        return Step.COUNTDOWN_TICK;
+    /** Called regularly (once per second); returns CONNECT_NOW once the delay has passed. */
+    public Step onTick(long nowMillis) {
+        if (phase != Phase.DELAY) return Step.NONE;
+        if (nowMillis - phaseStartedAt < settings.reconnectDelaySeconds() * 1000L) return Step.NONE;
+        enter(Phase.CONNECTING, nowMillis);
+        return Step.CONNECT_NOW;
     }
 
     /** The reconnect attempt failed (server probably still starting); keep waiting. */
@@ -105,14 +101,13 @@ public final class ReconnectSession {
         phase = Phase.FINISHED;
     }
 
-    private Step startCountdown(long nowMillis) {
-        if (settings.countdownSeconds() <= 0) {
+    private Step serverUp(long nowMillis) {
+        if (settings.reconnectDelaySeconds() <= 0) {
             enter(Phase.CONNECTING, nowMillis);
             return Step.CONNECT_NOW;
         }
-        enter(Phase.COUNTDOWN, nowMillis);
-        secondsLeft = settings.countdownSeconds();
-        return Step.COUNTDOWN_STARTED;
+        enter(Phase.DELAY, nowMillis);
+        return Step.SERVER_UP;
     }
 
     private void enter(Phase next, long nowMillis) {

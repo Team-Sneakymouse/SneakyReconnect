@@ -9,8 +9,7 @@ import java.util.stream.Collectors;
 /** Values from {@code config.yml}. */
 public record ReconnectSettings(
         Set<String> servers,
-        String permission,
-        int countdownSeconds,
+        int reconnectDelaySeconds,
         long pollIntervalMillis,
         long shutdownTimeoutMillis,
         long startupTimeoutMillis) {
@@ -25,15 +24,13 @@ public record ReconnectSettings(
 
     /** Builds settings from parsed YAML, falling back to defaults for missing keys. */
     public static ReconnectSettings fromMap(Map<String, Object> yaml) {
-        Object rawServers = yaml.getOrDefault("servers", List.of("dev"));
+        Object rawServers = yaml.getOrDefault("servers", List.of("dev-main"));
         Set<String> servers = rawServers instanceof List<?> list
                 ? list.stream().map(o -> String.valueOf(o).toLowerCase(Locale.ROOT)).collect(Collectors.toUnmodifiableSet())
                 : Set.of(String.valueOf(rawServers).toLowerCase(Locale.ROOT));
-        Object permission = yaml.get("permission");
         return new ReconnectSettings(
                 servers,
-                permission == null ? "" : permission.toString().trim(),
-                intValue(yaml, "countdown-seconds", 5),
+                intValue(yaml, "reconnect-delay-seconds", 5),
                 intValue(yaml, "poll-interval-seconds", 2) * 1000L,
                 intValue(yaml, "shutdown-timeout-seconds", 60) * 1000L,
                 intValue(yaml, "startup-timeout-seconds", 600) * 1000L);

@@ -4,13 +4,16 @@ Velocity plugin. When a watched server (for example `dev`) restarts and the prox
 fallback server, it sends you back once the server is up again.
 
 1. You're kicked from `dev` and the proxy moves you to another server (for example `live`).
-   Chat says you'll be reconnected.
+   Chat says you'll be reconnected once `dev` is back up.
 2. The plugin pings `dev` until it goes offline, then until it comes back.
-3. When it's back, chat shows a countdown (5 seconds by default) and the action bar counts down.
+3. When it's back, one chat message says you'll be reconnected in 5 seconds
+   (`reconnect-delay-seconds`).
 4. You're connected to `dev`.
 
-Click any of its chat messages, or run `/autoreconnect cancel`, to stay where you are.
-Switching servers yourself (for example `/server hub`) also cancels it.
+Only players with the `sneakyreconnect.reconnect` permission are sent back.
+
+Click either message, or run `/autoreconnect cancel`, to stay where you are; chat confirms the
+cancel. Switching servers yourself (for example `/server hub`) also cancels it, silently.
 
 It only handles kicks that move you to another server. If the proxy disconnects you entirely, the
 plugin can't do anything.
@@ -58,6 +61,6 @@ A private repository must set them itself. The Infisical identity must allow OID
 
 ## Code
 
-- `ReconnectSession`: the wait / countdown state machine. No Velocity types; unit tested.
+- `ReconnectSession`: the wait / reconnect state machine. No Velocity types; unit tested.
 - `ReconnectManager`: Velocity events, pings, scheduler, chat messages.
 - `AutoReconnectCommand`: `/autoreconnect cancel|reload`.
