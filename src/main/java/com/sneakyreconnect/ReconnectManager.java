@@ -19,6 +19,8 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.Style;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.slf4j.Logger;
 
 /** Wires {@link ReconnectSession}s to Velocity events, pings, and chat. */
@@ -86,8 +88,8 @@ final class ReconnectManager {
                 end(player.getUniqueId(), tracked);
             } else {
                 // Sent after landing on the fallback: chat sent mid-transfer can get lost.
-                player.sendMessage(cancellable(Component.text("You'll be reconnected to "
-                        + session.server() + " once it's back up. ", NamedTextColor.YELLOW)));
+                player.sendMessage(cancellable(line(NamedTextColor.YELLOW,
+                        "You'll be reconnected to ", session.server(), " once it's back up. ")));
             }
         }
     }
@@ -151,18 +153,17 @@ final class ReconnectManager {
         String server = session.server();
         switch (step) {
             case NONE, SERVER_DOWN -> { }
-            case SERVER_UP -> player.sendMessage(cancellable(Component.text(server
-                    + " is back up! Reconnecting in " + session.delaySeconds() + " seconds. ", NamedTextColor.GREEN)));
+            case SERVER_UP -> player.sendMessage(cancellable(line(NamedTextColor.GREEN,
+                    "", server, " is back up! Reconnecting in " + session.delaySeconds() + " seconds. ")));
             case CONNECT_NOW -> connect(player, tracked);
             case GAVE_UP_NO_RESTART -> {
                 end(player.getUniqueId(), tracked);
-                player.sendMessage(Component.text(server
-                        + " didn't go offline, so it wasn't a restart. Auto-reconnect stopped.", NamedTextColor.GRAY));
+                player.sendMessage(line(NamedTextColor.GRAY,
+                        "", server, " didn't go offline, so it wasn't a restart. Auto-reconnect stopped."));
             }
             case GAVE_UP_TIMEOUT -> {
                 end(player.getUniqueId(), tracked);
-                player.sendMessage(Component.text(server + " hasn't come back. Auto-reconnect stopped.",
-                        NamedTextColor.RED));
+                player.sendMessage(line(NamedTextColor.RED, "", server, " hasn't come back. Auto-reconnect stopped."));
             }
         }
     }
@@ -189,7 +190,7 @@ final class ReconnectManager {
                 Component reason = error != null
                         ? Component.text(String.valueOf(error.getMessage()))
                         : result.getReasonComponent().orElse(Component.text(result.getStatus().name()));
-                player.sendMessage(cancellable(Component.text("Couldn't join " + name + " yet (", NamedTextColor.GRAY)
+                player.sendMessage(cancellable(line(NamedTextColor.GRAY, "Couldn't join ", name, " yet (")
                         .append(reason)
                         .append(Component.text("). Retrying... "))));
             }
@@ -199,6 +200,13 @@ final class ReconnectManager {
     private void end(UUID id, Tracked tracked) {
         tracked.session.finish();
         sessions.remove(id, tracked);
+    }
+
+    /** A chat line in one color with the server name in bold. */
+    private static Component line(NamedTextColor color, String before, String server, String after) {
+        return Component.text(before, color)
+                .append(Component.text(server, Style.style(TextDecoration.BOLD)))
+                .append(Component.text(after));
     }
 
     /** Makes the whole line clickable to cancel, ending with a visible [Cancel] tag. */
