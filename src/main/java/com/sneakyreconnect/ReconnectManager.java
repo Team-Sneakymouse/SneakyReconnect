@@ -23,7 +23,10 @@ import net.kyori.adventure.text.format.Style;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.slf4j.Logger;
 
-/** Wires {@link ReconnectSession}s to Velocity events, pings, and chat. */
+/**
+ * Wires {@link ReconnectSession}s to Velocity events, pings, and chat. State is guarded by {@code synchronized (this)} because
+ * events, ping callbacks and the ticker run on different threads; never ping or send chat while holding the lock.
+ */
 final class ReconnectManager {
 
     static final String PERMISSION = "sneakyreconnect.reconnect";
