@@ -164,6 +164,7 @@ final class ReconnectManager {
                 player.sendMessage(line(NamedTextColor.GRAY,
                         "", server, " didn't go offline, so it wasn't a restart. Auto-reconnect stopped."));
             }
+            case GAVE_UP_REFUSED -> { } // Only connect() gets it, and reports it with the refusal reason.
             case GAVE_UP_TIMEOUT -> {
                 end(player.getUniqueId(), tracked);
                 player.sendMessage(line(NamedTextColor.RED, "", server, " hasn't come back. Auto-reconnect stopped."));
@@ -187,15 +188,15 @@ final class ReconnectManager {
                     end(player.getUniqueId(), tracked);
                     return;
                 }
-                // Usually the server is up but still refusing joins. Go back to waiting.
-                tracked.session.onConnectFailed(System.currentTimeMillis());
-                tracked.lastPingAt = System.currentTimeMillis();
+                // Usually the server is up but its plugins still refuse joins. Retry quietly.
+                if (tracked.session.onConnectFailed(System.currentTimeMillis()) != ReconnectSession.Step.GAVE_UP_REFUSED) return;
+                end(player.getUniqueId(), tracked);
                 Component reason = error != null
                         ? Component.text(String.valueOf(error.getMessage()))
                         : result.getReasonComponent().orElse(Component.text(result.getStatus().name()));
-                player.sendMessage(cancellable(line(NamedTextColor.GRAY, "Couldn't join ", name, " yet (")
+                player.sendMessage(line(NamedTextColor.RED, "", name, " is up but keeps refusing joins (")
                         .append(reason)
-                        .append(Component.text("). Retrying... "))));
+                        .append(Component.text("). Auto-reconnect stopped.")));
             }
         });
     }

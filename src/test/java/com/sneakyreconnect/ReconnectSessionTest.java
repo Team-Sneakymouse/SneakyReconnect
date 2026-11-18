@@ -62,15 +62,31 @@ class ReconnectSessionTest {
     }
 
     @Test
-    void failedConnectGoesBackToWaiting() {
+    void refusedJoinRetriesQuietlyAfterPollInterval() {
         ReconnectSession s = session();
         s.onPing(false, 1_000);
         s.onPing(true, 2_000);
         assertEquals(Step.CONNECT_NOW, s.onTick(5_000));
-        s.onConnectFailed(5_500);
-        assertEquals(Phase.AWAITING_STARTUP, s.phase());
-        assertTrue(s.wantsPing());
-        assertEquals(Step.SERVER_UP, s.onPing(true, 8_000));
+        assertEquals(Step.NONE, s.onConnectFailed(5_500));
+        assertEquals(Phase.RETRYING, s.phase());
+        assertFalse(s.wantsPing()); // no new "back up" announcement
+        assertEquals(Step.NONE, s.onTick(7_000));
+        assertEquals(Step.CONNECT_NOW, s.onTick(7_500));
+        assertEquals(Phase.CONNECTING, s.phase());
+    }
+
+    @Test
+    void givesUpWhenJoinsKeepBeingRefused() {
+        ReconnectSession s = session();
+        s.onPing(false, 1_000);
+        s.onPing(true, 2_000);
+        s.onTick(5_000);
+        assertEquals(Step.NONE, s.onConnectFailed(10_000));
+        s.onTick(20_000);
+        assertEquals(Step.NONE, s.onConnectFailed(609_999));
+        s.onTick(612_000);
+        assertEquals(Step.GAVE_UP_REFUSED, s.onConnectFailed(612_500));
+        assertTrue(s.isFinished());
     }
 
     @Test

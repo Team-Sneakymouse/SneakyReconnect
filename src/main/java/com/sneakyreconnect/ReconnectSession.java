@@ -5,11 +5,13 @@ package com.sneakyreconnect;
  *
  * <p>Flow: the player is kicked from the server and moved to a fallback. We wait until the server
  * stops answering pings (so we don't bounce back into a server that's still shutting down), then
- * until it answers again, then wait a short delay (so the player can cancel) and reconnect.
+ * until it answers again, then wait a short delay (so the player can cancel) and reconnect. A server
+ * that answers pings can still refuse joins while its plugins finish starting up, so a refused join
+ * is retried quietly until {@code startup-timeout-seconds} after the first refusal.
  */
 public final class ReconnectSession {
 
-    public enum Phase { AWAITING_SHUTDOWN, AWAITING_STARTUP, DELAY, CONNECTING, FINISHED }
+    public enum Phase { AWAITING_SHUTDOWN, AWAITING_STARTUP, DELAY, CONNECTING, RETRYING, FINISHED }
 
     /** What the caller should tell the player or do next. */
     public enum Step {
@@ -19,6 +21,7 @@ public final class ReconnectSession {
         CONNECT_NOW,
         GAVE_UP_NO_RESTART,
         GAVE_UP_TIMEOUT,
+        GAVE_UP_REFUSED,
     }
 
     private final String server;
@@ -26,6 +29,7 @@ public final class ReconnectSession {
     private Phase phase = Phase.AWAITING_SHUTDOWN;
     private long phaseStartedAt;
     private boolean landedOnFallback;
+    private long firstRefusedAt = -1;
 
     public ReconnectSession(String server, ReconnectSettings settings, long nowMillis) {
         this.server = server;
@@ -84,17 +88,33 @@ public final class ReconnectSession {
         return Step.NONE;
     }
 
-    /** Called regularly (once per second); returns CONNECT_NOW once the delay has passed. */
+    /** Called regularly (once per second); returns CONNECT_NOW once the delay or retry wait has passed. */
     public Step onTick(long nowMillis) {
-        if (phase != Phase.DELAY) return Step.NONE;
-        if (nowMillis - phaseStartedAt < settings.reconnectDelaySeconds() * 1000L) return Step.NONE;
+        long wait = switch (phase) {
+            case DELAY -> settings.reconnectDelaySeconds() * 1000L;
+            case RETRYING -> Math.max(1000L, settings.pollIntervalMillis());
+            default -> -1;
+        };
+        if (wait < 0 || nowMillis - phaseStartedAt < wait) return Step.NONE;
         enter(Phase.CONNECTING, nowMillis);
         return Step.CONNECT_NOW;
     }
 
-    /** The reconnect attempt failed (server probably still starting); keep waiting. */
-    public void onConnectFailed(long nowMillis) {
-        if (phase == Phase.CONNECTING) enter(Phase.AWAITING_STARTUP, nowMillis);
+    /**
+     * The reconnect attempt failed, usually because the server is up but its plugins aren't ready
+     * for joins yet. Retries after the poll interval without telling the player again.
+     *
+     * @return GAVE_UP_REFUSED once joins have been refused for {@code startup-timeout-seconds}
+     */
+    public Step onConnectFailed(long nowMillis) {
+        if (phase != Phase.CONNECTING) return Step.NONE;
+        if (firstRefusedAt < 0) firstRefusedAt = nowMillis;
+        if (nowMillis - firstRefusedAt >= settings.startupTimeoutMillis()) {
+            enter(Phase.FINISHED, nowMillis);
+            return Step.GAVE_UP_REFUSED;
+        }
+        enter(Phase.RETRYING, nowMillis);
+        return Step.NONE;
     }
 
     public void finish() {

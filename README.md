@@ -8,7 +8,10 @@ fallback server, it sends you back once the server is up again.
 2. The plugin pings `dev` until it goes offline, then until it comes back.
 3. When it's back, one chat message says you'll be reconnected in 5 seconds
    (`reconnect-delay-seconds`).
-4. You're connected to `dev`.
+4. You're connected to `dev`. If `dev` answers pings but still refuses the join (for example
+   SneakyVariables can't load your data yet), the plugin retries every `poll-interval-seconds`
+   without more chat. It stops with one message if joins are still refused
+   `startup-timeout-seconds` after the first refusal.
 
 Only players with the `sneakyreconnect.reconnect` permission are sent back.
 
