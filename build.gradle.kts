@@ -143,7 +143,7 @@ publishing {
     repositories {
         maven {
             name = "sneakyrp"
-            url = uri("https://maven.sneakyrp.com/releases")
+            url = uri("https://maven.sneakyrp.com/sneakymouse")
             credentials(PasswordCredentials::class)
             authentication {
                 create<org.gradle.authentication.http.BasicAuthentication>("basic")

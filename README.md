@@ -50,7 +50,7 @@ so builds need a git checkout with at least one commit.
 
 Every push to `main` runs `.github/workflows/publish.yml`, which calls the shared
 [`Team-Sneakymouse/ci`](https://github.com/Team-Sneakymouse/ci) Gradle workflow. It runs `check`,
-fetches Maven credentials from Infisical, and publishes to `https://maven.sneakyrp.com/releases`
+fetches Maven credentials from Infisical, and publishes to `https://maven.sneakyrp.com/sneakymouse`
 as `io.github.team-sneakymouse:sneakyreconnect:<version>`. Pull requests run `ci.yml`, which
 builds and checks without publishing.
 
